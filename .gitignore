@@ -24,6 +24,9 @@ out/
 *~
 .DS_Store
 
+# Local editor history snapshots
+.history/
+
 # OS
 Thumbs.db
 .DS_Store
