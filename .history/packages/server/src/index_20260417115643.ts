@@ -9,18 +9,8 @@ const PORT = Number(process.env.PORT ?? 4000);
 
 type PriceEvent = PriceUpdate;
 type ClientAction = {
-  type?: "control";
   action?: "subscribe" | "unsubscribe";
   symbol?: string;
-  requestId?: string;
-};
-type ServerAck = {
-  type: "ack";
-  ok: boolean;
-  action?: "subscribe" | "unsubscribe";
-  symbol?: string;
-  requestId?: string;
-  message?: string;
 };
 
 const priceBus = new EventEmitter();
@@ -140,12 +130,6 @@ async function main() {
   fastify.get("/prices", { websocket: true }, (connection) => {
     const clientSymbols = new Set<string>();
 
-    const sendAck = (payload: ServerAck) => {
-      if (connection.socket.readyState === connection.socket.OPEN) {
-        connection.socket.send(JSON.stringify(payload));
-      }
-    };
-
     const listener = (update: PriceEvent) => {
       if (
         clientSymbols.has(update.symbol) &&
@@ -160,85 +144,29 @@ async function main() {
     connection.socket.on("message", async (raw: unknown) => {
       try {
         const parsed = JSON.parse(String(raw)) as ClientAction;
-        if (parsed.type && parsed.type !== "control") {
-          return;
-        }
-
-        const action = parsed.action;
         const symbol = normalizeSymbol(parsed.symbol);
         if (!symbol) {
-          sendAck({
-            type: "ack",
-            ok: false,
-            action,
-            requestId: parsed.requestId,
-            message: "symbol is required",
-          });
           return;
         }
 
-        if (action === "subscribe") {
+        if (parsed.action === "subscribe") {
           if (clientSymbols.has(symbol)) {
-            sendAck({
-              type: "ack",
-              ok: true,
-              action,
-              symbol,
-              requestId: parsed.requestId,
-              message: "already subscribed",
-            });
             return;
           }
           clientSymbols.add(symbol);
           await addSymbolReference(page, symbol);
-          sendAck({
-            type: "ack",
-            ok: true,
-            action,
-            symbol,
-            requestId: parsed.requestId,
-          });
           return;
         }
 
-        if (action === "unsubscribe") {
+        if (parsed.action === "unsubscribe") {
           if (!clientSymbols.has(symbol)) {
-            sendAck({
-              type: "ack",
-              ok: true,
-              action,
-              symbol,
-              requestId: parsed.requestId,
-              message: "already unsubscribed",
-            });
             return;
           }
           clientSymbols.delete(symbol);
           await removeSymbolReference(page, symbol);
-          sendAck({
-            type: "ack",
-            ok: true,
-            action,
-            symbol,
-            requestId: parsed.requestId,
-          });
-          return;
         }
-
-        sendAck({
-          type: "ack",
-          ok: false,
-          action,
-          symbol,
-          requestId: parsed.requestId,
-          message: "unsupported action",
-        });
       } catch {
-        sendAck({
-          type: "ack",
-          ok: false,
-          message: "malformed message",
-        });
+        // Ignore malformed client messages.
       }
     });
 

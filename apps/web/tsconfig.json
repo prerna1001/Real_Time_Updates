@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "preserve",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "noEmit": true,
     "incremental": true,
@@ -12,9 +16,18 @@
     "isolatedModules": true,
     "strict": true,
     "paths": {
-      "@proto/*": ["../../packages/proto/src/*"],
-      "@server-types/*": ["../../packages/server/src/*"]
-    }
+      "@proto/*": [
+        "../../packages/proto/src/*"
+      ],
+      "@server-types/*": [
+        "../../packages/server/src/*"
+      ]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
   "include": [
     "next-env.d.ts",

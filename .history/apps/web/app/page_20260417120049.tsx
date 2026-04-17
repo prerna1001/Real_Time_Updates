@@ -13,7 +13,6 @@ interface PriceEvent {
   source: string;
 }
 
-// Backend acknowledgement for a requested action (subscribe/unsubscribe).
 interface AckMessage {
   type: "ack";
   ok: boolean;
@@ -39,20 +38,15 @@ export default function HomePage() {
   const [events, setEvents] = useState<PriceEvent[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
   const [uiMessage, setUiMessage] = useState<string>("");
-  // Tracks in-flight operations per symbol so UI can show "adding/removing" states.
   const [pendingBySymbol, setPendingBySymbol] = useState<Record<string, "subscribe" | "unsubscribe">>({});
-
-  // Refs are used so async websocket handlers always read the latest state.
   const wsRef = useRef<WebSocket | null>(null);
   const tickersRef = useRef<Ticker[]>([{ symbol: "BTCUSDT" }]);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef<number>(0);
-  // requestId -> original action context, used to reconcile server acks.
   const pendingRequestsRef = useRef<
     Record<string, { action: "subscribe" | "unsubscribe"; symbol: string }>
   >({});
 
-  // Runtime guard for price events from websocket payloads.
   const isPriceEvent = (value: unknown): value is PriceEvent => {
     if (typeof value !== "object" || value === null) {
       return false;
@@ -67,7 +61,6 @@ export default function HomePage() {
     );
   };
 
-  // Runtime guard for ack messages from websocket payloads.
   const isAckMessage = (value: unknown): value is AckMessage => {
     if (typeof value !== "object" || value === null) {
       return false;
@@ -80,7 +73,6 @@ export default function HomePage() {
   const buildRequestId = () =>
     `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-  // Sends a control message and registers a pending request for ack tracking.
   const sendControlMessage = (
     action: "subscribe" | "unsubscribe",
     symbol: string,
@@ -103,7 +95,6 @@ export default function HomePage() {
     return requestId;
   };
 
-  // Reconciles optimistic UI updates with backend acknowledgement responses.
   const handleAckMessage = (ack: AckMessage) => {
     const requestId = ack.requestId;
     if (!requestId) {
@@ -148,7 +139,6 @@ export default function HomePage() {
     setUiMessage(ack.message ?? `Failed to ${pending.action} ${pending.symbol}`);
   };
 
-  // Keep latest ticker list available to websocket callbacks (avoid stale closures).
   useEffect(() => {
     tickersRef.current = tickers;
   }, [tickers]);
@@ -156,7 +146,6 @@ export default function HomePage() {
   useEffect(() => {
     let cancelled = false;
 
-    // Maintains one socket lifecycle with reconnect/backoff behavior.
     const connect = () => {
       const host = process.env.NEXT_PUBLIC_WS_HOST ?? "localhost:4000";
       const proto = window.location.protocol === "https:" ? "wss" : "ws";
@@ -170,7 +159,6 @@ export default function HomePage() {
         setConnectionStatus("connected");
         setUiMessage("");
 
-        // Re-subscribe active tickers after reconnect.
         for (const ticker of tickersRef.current) {
           const requestId = buildRequestId();
           const message: ControlMessage = {
@@ -191,7 +179,6 @@ export default function HomePage() {
       ws.onmessage = (event: MessageEvent<string>) => {
         try {
           const payload = JSON.parse(event.data) as unknown;
-          // Control flow: ack messages mutate UI state; price messages update feed.
           if (isAckMessage(payload)) {
             handleAckMessage(payload);
             return;
@@ -210,7 +197,6 @@ export default function HomePage() {
           return;
         }
 
-        // Linear backoff with cap to avoid aggressive reconnect loops.
         setConnectionStatus("disconnected");
         const attempts = reconnectAttemptsRef.current + 1;
         reconnectAttemptsRef.current = attempts;
@@ -256,7 +242,6 @@ export default function HomePage() {
       return;
     }
 
-    // Optimistic add: immediately show ticker, then reconcile with ack.
     setTickers((prev: Ticker[]) => [...prev, { symbol }]);
     setPendingBySymbol((prev) => ({ ...prev, [symbol]: "subscribe" }));
     sendControlMessage("subscribe", symbol);
@@ -265,7 +250,6 @@ export default function HomePage() {
   };
 
   const removeTicker = (symbol: string) => {
-    // Keep ticker visible while "removing" until backend confirms unsubscribe.
     setPendingBySymbol((prev) => ({ ...prev, [symbol]: "unsubscribe" }));
     sendControlMessage("unsubscribe", symbol);
   };
