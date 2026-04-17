@@ -26,6 +26,7 @@ out/
 
 # Local editor history snapshots
 .history/
+.github/
 
 # OS
 Thumbs.db
